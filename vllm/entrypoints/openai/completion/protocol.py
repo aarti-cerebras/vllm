@@ -141,6 +141,15 @@ class CompletionRequest(OpenAIBaseModel):
             "need to map generated text back to input tokens."
         ),
     )
+    include_timing_metrics: bool = Field(
+        default=False,
+        description=(
+            "If true, the response 'usage' object includes a 'timing' list "
+            "with one entry per prompt in the batch, reporting per-request "
+            "timing such as queue waiting, prefill, and decode time. Requires "
+            "engine stat logging (i.e. not --disable-log-stats)."
+        ),
+    )
 
     cache_salt: str | None = Field(
         default=None,

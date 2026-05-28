@@ -102,11 +102,36 @@ class PromptTokenUsageInfo(OpenAIBaseModel):
     cached_tokens: int | None = None
 
 
+class TimingMetrics(OpenAIBaseModel):
+    """Per-request timing metrics, mirroring ``RequestStateStats`` plus a few
+    computed durations. One entry is emitted per prompt in a batched request."""
+
+    num_generation_tokens: int = 0
+
+    # Engine frontend timestamp (wall-clock).
+    arrival_time: float = 0.0
+
+    # Engine core timestamps (monotonic). Only meaningful as diffs.
+    queued_ts: float = 0.0
+    scheduled_ts: float = 0.0
+    first_token_ts: float = 0.0
+    last_token_ts: float = 0.0
+
+    first_token_latency: float = 0.0
+    is_corrupted: bool = False
+
+    # Computed durations (seconds).
+    queue_waiting_time: float = 0.0
+    prefill_time: float = 0.0
+    decode_time: float = 0.0
+
+
 class UsageInfo(OpenAIBaseModel):
     prompt_tokens: int = 0
     total_tokens: int = 0
     completion_tokens: int | None = 0
     prompt_tokens_details: PromptTokenUsageInfo | None = None
+    timing: list[TimingMetrics] | None = None
 
 
 class RequestResponseMetadata(BaseModel):

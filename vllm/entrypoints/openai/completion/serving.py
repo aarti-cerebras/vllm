@@ -23,6 +23,7 @@ from vllm.entrypoints.openai.engine.protocol import (
     ErrorResponse,
     PromptTokenUsageInfo,
     RequestResponseMetadata,
+    TimingMetrics,
     UsageInfo,
 )
 from vllm.entrypoints.openai.engine.serving import (
@@ -485,6 +486,7 @@ class OpenAIServingCompletion(OpenAIServing):
         num_generated_tokens = 0
         kv_transfer_params = None
         last_final_res = None
+        timing_data: list[TimingMetrics] = []
         for final_res in final_res_batch:
             last_final_res = final_res
             prompt_token_ids = final_res.prompt_token_ids
@@ -563,11 +565,33 @@ class OpenAIServingCompletion(OpenAIServing):
 
             num_prompt_tokens += len(prompt_token_ids)
 
+            # One timing entry per prompt (per final_res), independent of `n`.
+            if request.include_timing_metrics and final_res.metrics:
+                m = final_res.metrics
+                timing_data.append(
+                    TimingMetrics(
+                        num_generation_tokens=m.num_generation_tokens,
+                        arrival_time=m.arrival_time,
+                        queued_ts=m.queued_ts,
+                        scheduled_ts=m.scheduled_ts,
+                        first_token_ts=m.first_token_ts,
+                        last_token_ts=m.last_token_ts,
+                        first_token_latency=m.first_token_latency,
+                        is_corrupted=m.is_corrupted,
+                        queue_waiting_time=m.scheduled_ts - m.queued_ts,
+                        prefill_time=m.first_token_ts - m.scheduled_ts,
+                        decode_time=m.last_token_ts - m.first_token_ts,
+                    )
+                )
+
         usage = UsageInfo(
             prompt_tokens=num_prompt_tokens,
             completion_tokens=num_generated_tokens,
             total_tokens=num_prompt_tokens + num_generated_tokens,
         )
+
+        if timing_data:
+            usage.timing = timing_data
 
         if (
             self.enable_prompt_tokens_details
