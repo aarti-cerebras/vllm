@@ -229,6 +229,9 @@ if TYPE_CHECKING:
     VLLM_ENFORCE_STRICT_TOOL_CALLING: bool = False
     VLLM_CUSTOM_SCOPES_FOR_PROFILING: bool = False
     VLLM_NVTX_SCOPES_FOR_PROFILING: bool = False
+    VLLM_SPEC_DECODE_TIMING: bool = False
+    VLLM_SPEC_DECODE_TIMING_INTERVAL: int = 100
+    VLLM_SPEC_DECODE_TIMING_DETAIL: bool = False
     VLLM_KV_EVENTS_USE_INT_BLOCK_HASHES: bool = True
     VLLM_OBJECT_STORAGE_SHM_BUFFER_NAME: str = "VLLM_OBJECT_STORAGE_SHM_BUFFER"
     VLLM_DEEPEP_BUFFER_SIZE_MB: int = 1024
@@ -1607,6 +1610,22 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Add optional nvtx scopes for profiling, disable to avoid overheads
     "VLLM_NVTX_SCOPES_FOR_PROFILING": lambda: bool(
         int(os.getenv("VLLM_NVTX_SCOPES_FOR_PROFILING", "0"))
+    ),
+    # Enable lightweight per-phase CUDA-event timing for speculative decoding
+    # (target/draft forwards, draft loop, sampling). Logs periodic wall-clock
+    # means from the worker. Disabled by default to avoid any overhead.
+    "VLLM_SPEC_DECODE_TIMING": lambda: bool(
+        int(os.getenv("VLLM_SPEC_DECODE_TIMING", "0"))
+    ),
+    # Number of model steps between spec-decode timing log lines.
+    "VLLM_SPEC_DECODE_TIMING_INTERVAL": lambda: int(
+        os.getenv("VLLM_SPEC_DECODE_TIMING_INTERVAL", "100")
+    ),
+    # Break down the autoregressive draft loop into per-iteration timings.
+    # Adds a couple of CUDA-event records per loop pass; off by default since
+    # draft decode steps are launch-bound.
+    "VLLM_SPEC_DECODE_TIMING_DETAIL": lambda: bool(
+        int(os.getenv("VLLM_SPEC_DECODE_TIMING_DETAIL", "0"))
     ),
     # Represent block hashes in KV cache events as 64-bit integers instead of
     # raw bytes. Defaults to True for backward compatibility.
