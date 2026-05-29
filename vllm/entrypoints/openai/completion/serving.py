@@ -5,7 +5,7 @@ import asyncio
 import time
 from collections.abc import AsyncGenerator, AsyncIterator
 from collections.abc import Sequence as GenericSequence
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import Request
 
@@ -25,6 +25,7 @@ from vllm.entrypoints.openai.engine.protocol import (
     RequestResponseMetadata,
     TimingMetrics,
     UsageInfo,
+    build_spec_decode_stats,
 )
 from vllm.entrypoints.openai.engine.serving import (
     GenerationError,
@@ -487,8 +488,11 @@ class OpenAIServingCompletion(OpenAIServing):
         kv_transfer_params = None
         last_final_res = None
         timing_data: list[TimingMetrics] = []
+        spec_decode_metrics: list[Any] = []
         for final_res in final_res_batch:
             last_final_res = final_res
+            if request.include_spec_decode_stats and final_res.metrics:
+                spec_decode_metrics.append(final_res.metrics)
             prompt_token_ids = final_res.prompt_token_ids
             assert prompt_token_ids is not None
             prompt_logprobs = clamp_prompt_logprobs(final_res.prompt_logprobs)
@@ -592,6 +596,9 @@ class OpenAIServingCompletion(OpenAIServing):
 
         if timing_data:
             usage.timing = timing_data
+
+        if spec_decode_metrics:
+            usage.spec_decode_stats = build_spec_decode_stats(spec_decode_metrics)
 
         if (
             self.enable_prompt_tokens_details

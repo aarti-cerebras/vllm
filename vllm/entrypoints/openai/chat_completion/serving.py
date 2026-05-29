@@ -46,6 +46,7 @@ from vllm.entrypoints.openai.engine.protocol import (
     RequestResponseMetadata,
     ToolCall,
     UsageInfo,
+    build_spec_decode_stats,
 )
 from vllm.entrypoints.openai.engine.serving import (
     GenerationError,
@@ -1368,6 +1369,9 @@ class OpenAIServingChat(OpenAIServing):
             usage.prompt_tokens_details = PromptTokenUsageInfo(
                 cached_tokens=final_res.num_cached_tokens
             )
+
+        if request.include_spec_decode_stats and final_res.metrics:
+            usage.spec_decode_stats = build_spec_decode_stats([final_res.metrics])
 
         request_metadata.final_usage_info = usage
 

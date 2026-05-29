@@ -368,6 +368,18 @@ class ChatCompletionRequest(OpenAIBaseModel):
         ),
     )
 
+    include_spec_decode_stats: bool = Field(
+        default=False,
+        description=(
+            "If true, and speculative decoding is enabled, the response 'usage' "
+            "object includes a 'spec_decode_stats' object with per-request "
+            "speculative decoding metrics (draft/accepted token counts, "
+            "acceptance rate, mean acceptance length, per-position acceptance "
+            "rate, and throughput). Requires engine stat logging (i.e. not "
+            "--disable-log-stats)."
+        ),
+    )
+
     cache_salt: str | None = Field(
         default=None,
         description=(

@@ -192,6 +192,11 @@ class EngineCoreOutput(
     # A value greater than 0 indicates that the output is corrupted.
     num_nans_in_logits: int = 0
 
+    # Per-step speculative decoding counts for this request (0 when this step
+    # did not draft). num_accepted_tokens excludes the bonus token.
+    num_draft_tokens: int = 0
+    num_accepted_tokens: int = 0
+
     @property
     def finished(self) -> bool:
         return self.finish_reason is not None

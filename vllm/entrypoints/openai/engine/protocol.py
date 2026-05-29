@@ -126,12 +126,80 @@ class TimingMetrics(OpenAIBaseModel):
     decode_time: float = 0.0
 
 
+class SpecDecodeStats(OpenAIBaseModel):
+    """Per-request speculative decoding metrics."""
+
+    num_drafts: int
+    num_draft_tokens: int
+    num_accepted_tokens: int
+    acceptance_rate: float
+    mean_acceptance_length: float
+    acceptance_rate_per_pos: list[float]
+    draft_throughput: float
+    accepted_throughput: float
+
+
+def build_spec_decode_stats(metrics_list: list[Any]) -> "SpecDecodeStats | None":
+    """Aggregate per-request spec-decode counters from one or more
+    ``RequestStateStats`` (one per prompt in a batched request) into a single
+    ``SpecDecodeStats``. Returns ``None`` when the request(s) used no drafting.
+
+    Mirrors the derivations in ``SpecDecodingLogging.log``:
+    mean acceptance length includes the bonus token (``1 + accepted/drafts``),
+    and per-position rate is ``accepted_per_pos[i] / drafts``. Throughput uses
+    the decode interval (``last_token_ts - first_token_ts``).
+    """
+    num_drafts = 0
+    num_draft_tokens = 0
+    num_accepted_tokens = 0
+    accepted_per_pos: list[int] = []
+    first_token_ts = float("inf")
+    last_token_ts = 0.0
+    for m in metrics_list:
+        if m is None or getattr(m, "num_spec_drafts", 0) == 0:
+            continue
+        num_drafts += m.num_spec_drafts
+        num_draft_tokens += m.num_spec_draft_tokens
+        num_accepted_tokens += m.num_spec_accepted_tokens
+        for i, count in enumerate(m.spec_accepted_per_pos):
+            if i >= len(accepted_per_pos):
+                accepted_per_pos.append(0)
+            accepted_per_pos[i] += count
+        first_token_ts = min(first_token_ts, m.first_token_ts)
+        last_token_ts = max(last_token_ts, m.last_token_ts)
+
+    if num_drafts == 0:
+        return None
+
+    decode_seconds = max(last_token_ts - first_token_ts, 0.0)
+    acceptance_rate = (
+        num_accepted_tokens / num_draft_tokens if num_draft_tokens else 0.0
+    )
+    mean_acceptance_length = 1.0 + num_accepted_tokens / num_drafts
+    acceptance_rate_per_pos = [count / num_drafts for count in accepted_per_pos]
+    draft_throughput = num_draft_tokens / decode_seconds if decode_seconds > 0 else 0.0
+    accepted_throughput = (
+        num_accepted_tokens / decode_seconds if decode_seconds > 0 else 0.0
+    )
+    return SpecDecodeStats(
+        num_drafts=num_drafts,
+        num_draft_tokens=num_draft_tokens,
+        num_accepted_tokens=num_accepted_tokens,
+        acceptance_rate=acceptance_rate,
+        mean_acceptance_length=mean_acceptance_length,
+        acceptance_rate_per_pos=acceptance_rate_per_pos,
+        draft_throughput=draft_throughput,
+        accepted_throughput=accepted_throughput,
+    )
+
+
 class UsageInfo(OpenAIBaseModel):
     prompt_tokens: int = 0
     total_tokens: int = 0
     completion_tokens: int | None = 0
     prompt_tokens_details: PromptTokenUsageInfo | None = None
     timing: list[TimingMetrics] | None = None
+    spec_decode_stats: SpecDecodeStats | None = None
 
 
 class RequestResponseMetadata(BaseModel):

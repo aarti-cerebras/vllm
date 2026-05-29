@@ -1309,6 +1309,10 @@ class Scheduler(SchedulerInterface):
                 sampled_token_ids[req_index] if sampled_token_ids else []
             )
 
+            # Per-request spec-decode counts for this step, surfaced on the
+            # EngineCoreOutput so the frontend can accumulate per-request stats.
+            req_num_draft_tokens = 0
+            req_num_accepted_tokens = 0
             scheduled_spec_token_ids = (
                 scheduler_output.scheduled_spec_decode_tokens.get(req_id)
             )
@@ -1316,6 +1320,13 @@ class Scheduler(SchedulerInterface):
                 num_draft_tokens = len(scheduled_spec_token_ids)
                 num_accepted = len(generated_token_ids) - 1
                 num_rejected = num_draft_tokens - num_accepted
+                # Mirror make_spec_decoding_stats: discount invalid draft tokens.
+                req_num_accepted_tokens = num_accepted
+                req_num_draft_tokens = num_draft_tokens
+                if scheduler_output.num_invalid_spec_tokens:
+                    req_num_draft_tokens -= (
+                        scheduler_output.num_invalid_spec_tokens.get(req_id, 0)
+                    )
                 # num_computed_tokens represents the number of tokens
                 # processed in the current step, considering scheduled
                 # tokens and rejections. If some tokens are rejected,
@@ -1429,6 +1440,8 @@ class Scheduler(SchedulerInterface):
                         trace_headers=request.trace_headers,
                         routed_experts=routed_experts,
                         num_nans_in_logits=request.num_nans_in_logits,
+                        num_draft_tokens=req_num_draft_tokens,
+                        num_accepted_tokens=req_num_accepted_tokens,
                     )
                 )
             else:

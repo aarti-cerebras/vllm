@@ -219,6 +219,13 @@ class RequestStateStats:
     # Track if this request is corrupted (NaNs in logits)
     is_corrupted: bool = False
 
+    # Per-request speculative decoding counters (accumulated across steps).
+    # num_spec_accepted_tokens excludes the bonus token.
+    num_spec_drafts: int = 0
+    num_spec_draft_tokens: int = 0
+    num_spec_accepted_tokens: int = 0
+    spec_accepted_per_pos: list[int] = field(default_factory=list)
+
 
 @dataclass
 class FinishedRequestStats:
@@ -371,6 +378,18 @@ class IterationStats:
             req_stats.first_token_latency = first_token_latency
 
         req_stats.num_generation_tokens += num_new_generation_tokens
+
+        # Accumulate per-request speculative decoding counts for this step.
+        if output.num_draft_tokens > 0:
+            req_stats.num_spec_drafts += 1
+            req_stats.num_spec_draft_tokens += output.num_draft_tokens
+            req_stats.num_spec_accepted_tokens += output.num_accepted_tokens
+            # Grow to the drafted length so rejected positions report 0.0.
+            per_pos = req_stats.spec_accepted_per_pos
+            while len(per_pos) < output.num_draft_tokens:
+                per_pos.append(0)
+            for i in range(output.num_accepted_tokens):
+                per_pos[i] += 1
 
         # Track if this request is corrupted (only check once per request)
         # Early exit if already marked as corrupted to avoid redundant checks
